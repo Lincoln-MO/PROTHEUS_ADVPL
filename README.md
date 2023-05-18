@@ -1,5 +1,5 @@
 # PROTHEUS_ADVPL
-Alguns programas feitos em advpl para treinar.
+Alguns programas que fiz em advpl para treinar.
 
 AdvPL (Advanced Protheus Language) é uma linguagem de programação desenvolvida especificamente para o sistema ERP Protheus, da empresa brasileira TOTVS. O Protheus é uma solução de software empresarial amplamente utilizada para gerenciamento de recursos, como finanças, estoque, vendas, compras e produção.
 
