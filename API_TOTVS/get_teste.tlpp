@@ -1,0 +1,63 @@
+#INCLUDE "tlpp-core.th"
+#INCLUDE "tlpp-rest.th"
+
+
+Class classGet
+    Public Method New() Constructor 
+
+    @get("/cliente/:code")
+    Public Method Store()
+
+
+EndClass 
+
+
+Method New() Class classGet
+Return Self 
+
+Method Store() Class classGet
+    Local jBody As Json 
+    Local cCode AS Character
+    local cSql as character
+    local cAlias as character
+    local cData as character
+    local jData as Json
+    cCode := ""
+    cResponse := ""
+    cData := ""
+    
+    
+
+    jBody := oRest:getPathParamsRequest()
+        //jBody := JsonObject():New()
+        //jBody:fromJson(cBody)
+
+        //if ( jBody:GetJsonText("code") )
+            cCode := jBody:GetJsonText("code")
+        //endif
+
+    cSql := "Select * from " + RetSqlName("SA1") + " where A1_COD = '" + cCode + "'"
+
+
+    cAlias := GetNextAlias()
+    DbUseArea(.t., 'TOPCONN', TcGenQry(,, cSql), cAlias, .f., .t.)
+
+    if (cAlias)->(EoF()) //Se retornou vazio
+        oRest:setStatusCode(404)
+    else
+        jData := JsonObject():Mew()
+            jData["nome"] := ALLTRIM((cAlias)->A1_NOME)
+            jData["end"] := ALLTRIM((cAlias)->A1_END)
+            jData["bairro"] := ALLTRIM((cAlias)->A1_BAIRRO)
+            jData["est"] := ALLTRIM((cAlias)->A1_EST)
+            //cData := cData + ALLTRIM((cAlias)->A1_NOME) + ";" + ALLTRIM((cAlias)->A1_END) + ";" + ALLTRIM((cAlias)->A1_BAIRRO) + ";" + ALLTRIM((cAlias)->A1_EST)
+    endif
+
+    (cAlias)->(DbCloseArea())
+
+        //oRest:setStatusCode(200)
+        oRest:setKeyHeaderResponse('Content-Type', 'application/json')
+        oRest:setResponse(jData:toJson())
+     
+Return .t.
+

@@ -1,0 +1,27 @@
+#include 'tlpp-core.th'
+#include 'tlpp-rest.th'
+
+Class HelloWorld
+    Public Method New() Constructor 
+
+    @Post("/helloworld")
+    Public Method HW()
+EndClass 
+
+// instanciando o objeto
+Method New() Class HelloWorld
+Return Self 
+
+Method HW() Class HelloWorld
+    Local cBody As Character
+    
+    cBody := oRest:GetBodyRequest()
+
+    If Empty(cBody)
+        oRest:setStatusCode(400)
+    EndIf
+
+    oRest:setKeyHeaderResponse('Content-Type', 'application/json')
+    oRest:setResponse({"status": .t., "mensagem": "Incluido com sucesso"})
+    
+Return .t.

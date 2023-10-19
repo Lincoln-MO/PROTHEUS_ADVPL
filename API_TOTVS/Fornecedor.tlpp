@@ -1,0 +1,294 @@
+#include 'tlpp-core.th'
+#include 'tlpp-rest.th'
+
+/* TODO:
+    - Não usar o UPDATE
+    - Arrumar o JQuery
+*/
+
+Class Fornecedor
+    Public Method New() Constructor 
+
+    // Listar todos os fornecedores
+    @Get("/fornecedor")
+    Public Method Index()
+    
+    // Mostrar o fornecedor com base em seu ID (A2_COD)
+    @Get("/fornecedor/:id")
+    Public Method Show()
+
+    // Deletar o fornecedor com base em seu ID (A2_COD)
+    @Delete("/fornecedor/:id")
+    Public Method Destroy()
+
+    // Cadastro de fornecedor
+    @Post("/fornecedor")
+    Public Method Store()
+
+    // Atualizar os dados de um fornecedor
+    @Put("/fornecedor/:id")
+    Public Method Update()
+
+    Private Method ExistID(cFilter)
+    Private Method ExistCNPJ(cFilter)
+    Private Method Valid(jDados)
+EndClass 
+
+// Instanciando o Objeto
+Method New() Class Fornecedor
+Return Self 
+
+
+Method Index() Class Fornecedor
+    Local cStrJson As Character
+    Local cError As Character
+    Local jBody As Json
+    Local cAlias As Character
+
+    cAlias := GetNextAlias()
+
+    BeginSql Alias cAlias
+        SELECT A2_COD, A2_CGC, A2_NOME
+        FROM %table:SA2%
+        WHERE %notdel%
+        AND A2_FILIAL = %xFilial:SA2%
+    EndSql
+
+    If (cAlias)->(EOf())
+        oRest:setKeyHeaderResponse('Content-Type', 'application/json')
+        oRest:setResponse({"status": .f., "mensagem": "Tabela SA2 Vazia"})
+        Return
+    EndIf
+
+    cStrJson := '{'
+        cStrJson += '"fornecedores": ['
+            While !(cAlias)->(EOf())
+
+                cStrJson += '{'
+                    cStrJson += '"id": "' + AllTrim((cAlias)->A2_COD) + '",'
+                    cStrJson += '"cnpj": "' + AllTrim((cAlias)->A2_CGC) + '",'
+                    cStrJson += '"nome": "' + AllTrim((cAlias)->A2_NOME) + '"'
+                cStrJson += '},'
+
+                (cAlias)->(DbSkip())
+            EndDo
+
+            // Remover a vírgula do último objeto
+            cStrJson := SubStr(cStrJson, 1, Len(cStrJson)-1);
+            
+        cStrJson += ']'
+    cStrJson += '}'
+
+    (cAlias)->(DbCloseArea())
+
+    jBody := JsonObject():New()
+    cError := jBody:fromJson(cStrJson) // Transformando a String em objeto JSON
+
+    If !Empty(cError)
+        oRest:setKeyHeaderResponse('Content-Type', 'application/json')
+        oRest:setResponse({"status": .f., "mensagem": "Erro ao transformar o Object JSON"})
+        Return
+    EndIf
+
+    oRest:setKeyHeaderResponse('Content-Type', 'application/json')
+    oRest:setResponse(jBody)
+Return
+
+
+Method Show() Class Fornecedor
+    Local jBody As Json
+    Local cFilter As Character
+    Local cAlias As Character
+
+    jBody := JsonObject():New()
+    jBody := oRest:getPathParamsRequest()
+
+    If !Self:ExistID(jBody["id"])
+        oRest:setKeyHeaderResponse('Content-Type', 'application/json')
+        oRest:setResponse({"status": .f., "mensagem": "Fornecedor não existe"})
+        Return
+    EndIf
+
+    cFilter := jBody["id"]
+    
+    cAlias := GetNextAlias()
+
+    BeginSql Alias cAlias
+        SELECT A2_COD, A2_CGC, A2_NOME
+        FROM %table:SA2%
+        WHERE %notdel%
+        AND A2_FILIAL = %xFilial:SA2%
+        AND A2_COD = %exp:cFilter%
+    EndSql
+    
+    oRest:setResponse({"id": AllTrim((cAlias)->A2_COD), "cnpj": AllTrim((cAlias)->A2_CGC), "nome": AllTrim((cAlias)->A2_NOME)})
+
+    (cAlias)->(DbCloseArea())
+    
+Return
+
+
+Method Destroy() Class Fornecedor
+    Local jBody As Json
+    Local cFilter As Character
+    Local cQryUpd As Character
+    Local nErro As Numeric
+
+    jBody := JsonObject():New()
+    jBody := oRest:getPathParamsRequest()
+
+    cFilter := jBody["id"]
+
+    If !Self:ExistID(cFilter)
+        oRest:setKeyHeaderResponse('Content-Type', 'application/json')
+        oRest:setResponse({"status": .f., "mensagem": "Fornecedor não existe"})
+        Return
+    EndIf
+
+    Begin Transaction
+        //Montar o Update
+        cQryUpd := " UPDATE " + RetSqlName("SA2") + " "
+        cQryUpd += "     SET D_E_L_E_T_ = '*' "
+        cQryUpd += " WHERE "
+        cQryUpd += "     A2_FILIAL = '" + FWxFilial('SA2') + "' "
+        cQryUpd += "     AND A2_COD = '" + cFilter + "' "
+
+        //Tenta executar o update
+        nErro := TcSqlExec(cQryUpd)
+
+        oRest:setKeyHeaderResponse('Content-Type', 'application/json')
+
+        //Se houve erro, mostra a mensagem e cancela a transação
+        If nErro != 0
+            oRest:setResponse({"status": .f., "mensagem": "Fornecedor não pode ser excluído"})
+            DisarmTransaction()
+        Else
+            oRest:setResponse({"status": .t., "mensagem": "Fornecedor excluído com sucesso!"})
+        EndIf
+        
+    End Transaction
+
+Return
+
+
+Method Store() Class Fornecedor
+    Local jBody As Json 
+    Local cBody As Character
+
+    cBody := oRest:GetBodyRequest()
+    If Empty(cBody)
+        oRest:setStatusCode(400)
+        Return
+    EndIf
+
+    jBody := JsonObject():New()
+    jBody:fromJson(cBody)
+
+    If !Self:Valid(jBody)
+        oRest:setStatusCode(400)
+        oRest:setKeyHeaderResponse('Content-Type', 'application/json')
+        oRest:setResponse({"status": .f., "mensagem": "Layout invalido"})
+    EndIf
+
+    If Self:ExistID(jBody["id"])
+        oRest:setKeyHeaderResponse('Content-Type', 'application/json')
+        oRest:setResponse({"status": .f., "mensagem": "ID já existe na base"})
+        Return
+    EndIf
+
+    If Self:ExistCNPJ(jBody["cnpj"])
+        oRest:setKeyHeaderResponse('Content-Type', 'application/json')
+        oRest:setResponse({"status": .f., "mensagem": "CNPJ já existe na base"})
+        Return
+    EndIf
+    
+    SA2->(DbSetOrder(1))
+    SA2->(RecLock("SA2", .t.))
+
+    SA2->A2_COD := jBody["id"]
+    SA2->A2_CGC := jBody["cnpj"]
+    SA2->A2_NOME := jBody["nome"]
+
+    /* JSON teste: 
+    {
+        "id": "10",
+        "cnpj": "135456",
+        "nome": "EMP TEST REST"
+    }
+    */
+
+    SA2->(MsUnlock())
+    
+Return
+
+
+Method Update() Class Fornecedor
+    oRest:setKeyHeaderResponse('Content-Type', 'application/json')
+    oRest:setResponse({"mensagem": "Update"})
+Return
+
+
+Method ExistID(cFilter As Character) Class Fornecedor
+    Local jBody As Json
+    Local cAlias As Character
+
+    jBody := JsonObject():New()
+    jBody := oRest:getPathParamsRequest()
+    
+    cAlias := GetNextAlias()
+
+    BeginSql Alias cAlias
+        SELECT COUNT(*) AS total_linhas
+        FROM %table:SA2%
+        WHERE %notdel%
+        AND A2_FILIAL = %xFilial:SA2%
+        AND A2_COD = %exp:cFilter%
+    EndSql
+
+    If (cAlias)->total_linhas <= 0
+        Return .F.
+    EndIf
+
+    (cAlias)->(DbCloseArea())
+Return .T.
+
+Method ExistCNPJ(cFilter As Character) Class Fornecedor
+    Local jBody As Json
+    Local cAlias As Character
+
+    jBody := JsonObject():New()
+    jBody := oRest:getPathParamsRequest()
+    
+    cAlias := GetNextAlias()
+
+    BeginSql Alias cAlias
+        SELECT COUNT(*) AS total_linhas
+        FROM %table:SA2%
+        WHERE %notdel%
+        AND A2_FILIAL = %xFilial:SA2%
+        AND A2_CGC = %exp:cFilter%
+    EndSql
+
+    If (cAlias)->total_linhas <= 0
+        Return .F.
+    EndIf
+
+    (cAlias)->(DbCloseArea())
+Return .T.
+
+Method Valid(jDados As Json) Class Fornecedor
+    Local aProperties As Array 
+    Local nI As Numeric
+
+    aProperties := {}
+    AAdd(aProperties, "id")
+    AAdd(aProperties, "cnpj")
+    AAdd(aProperties, "nome")
+    
+    For nI := 1 To Len(aProperties)
+        If !jDados:hasProperty(aProperties[nI])
+            Return .F.
+        EndIf
+    Next
+
+Return .T.

@@ -1,0 +1,49 @@
+#include 'tlpp-core.th'
+#include 'tlpp-rest.th'
+
+Class classGet
+    Public Method New() Constructor 
+
+    @get("/cliente/:code")
+    Public Method Store()
+
+EndClass 
+
+Method New() Class classGet
+Return Self 
+
+Method Store() Class classGet
+    Local jBody As Json
+    Local cCode As Character 
+    Local cSql As Character
+    Local cAlias As Character
+    Local cData As Character
+    Local jData As Json
+    
+    cCode := ""
+    cResponse := ""
+    cData := ""
+    
+    jBody := oRest:getPathParamsRequest()
+    cCode := jBody:GetJsonText("code")
+    cSql := "Select * from" + RetSqlName("SA1") + "were A1_COD - '" + cCode + "'"
+
+    cAlias := GetNextAlias()
+    DbUseArea(.t., 'TOPCONN', TCGenQry(,,cSql), cAlias, .f., .t.)
+
+    if (cAlias)->(EoF()) //Se retorna vazio
+        oRest:setStatusCode(404)
+    else
+        JData := JsonObject():Mew()
+            jData["nome"] := ALLTRIN((cAlias)->A1_NOME)
+            jData["end"] := ALLTRIN((cAlias)->A1_END)
+            jData["bairro"] := ALLTRIN((cAlias)->A1_BAIRRO)
+            jData["est"] := ALLTRIN((cAlias)->A1_EST)
+    endif
+
+    (cAlias)->(DbCloseArea())
+
+    oRest:setkeyHeaderResponse('Cpntent-Type', 'application/json')
+    oRest:setRespanse(jData:taJson())
+
+Return .t.
